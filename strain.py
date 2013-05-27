@@ -22,12 +22,18 @@ WGETS = 100
 WGET = "/usr/bin/wget"
 
 pipes = []
+ivlc = vlc.Instance()
 
-def runwget(url):
+def runwget(url, pipelist):
 	cmdline = WGET + " " + WGETOPTS + " " + url
 	p = subprocess.Popen(cmdline, shell=True, stdout=subprocess.PIPE)
-	print p
-	pipes.append(p.stdout)
+	pipelist.append(p.stdout)
+
+def attachvlc(pipe):
+	p = ivlc.media_player_new()
+	m = ivlc.media_new_fd(pipe.fileno())
+	p.set_media(m)
+	p.play()
 	
 if __name__ == "__main__":
 	if len(sys.argv) < 2:
@@ -35,9 +41,11 @@ if __name__ == "__main__":
 		sys.exit(1)
 		
 	url = sys.argv[1]
-	
+
 	for i in range(WGETS):
-		runwget(url)
+		runwget(url, pipes)
+
+	attachvlc(pipes.pop())
 
 	while (True):
 		for i in pipes:

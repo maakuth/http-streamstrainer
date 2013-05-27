@@ -1,4 +1,8 @@
 Requirements
 ------------
+* Python (developed with 2.7.3)
+
 * VLC Python Bindings 
   http://git.videolan.org/?p=vlc/bindings/python.git;a=summary
+
+* GNU Wget
