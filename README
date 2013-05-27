@@ -1,3 +1,15 @@
+HTTP Stream Strainer
+====================
+(C) 2013 Markus Vuorio, see COPYING
+
+
+This script intentionally causes load to HTTP a stream source and samples it
+with VLC to see if the stream multiplex is okay.
+
+DISCLAIMER:
+This script is intended to heavily load http streams. Please do not use it 
+without permission for the stream provider.
+
 Requirements
 ------------
 * Python (developed with 2.7.3)

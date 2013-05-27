@@ -12,6 +12,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+"""
+strain.py
+Program to load HTTP streams with VLC to see how the streaming server copes.
+"""
+
 import os
 import sys
 import vlc
@@ -19,26 +24,53 @@ import time
 import subprocess
 
 WGETOPTS = "-q -O-"
-WGETS = 3 #How many wgets to spawn
+WGETS = 1000 #How many wgets to spawn
 PIPE_CHANGE_INTERVAL = 20 #How many seconds will we test one stream
 WGET = "/usr/bin/wget"
 
-ivlc = vlc.Instance()
+#These options should disable media decoding, we are only interested in mux wellbeing
+ivlc = vlc.Instance("--novideo", "--no-audio") 
 vlcplayer = ivlc.media_player_new()
-
 pipe_to_test = None
 
 def runwget(url, pipes):
+	"""
+	Start one wget instance and add it's stdout to global pipes list
+	"""
 	cmdline = WGET + " " + WGETOPTS + " " + url
 	p = subprocess.Popen(cmdline, shell=True, stdout=subprocess.PIPE)
 	pipes.append(p.stdout)
 
+def startwgets(url, pipes):
+	"""
+	Start a lot of wgets
+	"""
+	print("Starting " + str(WGETS) + " wgets")
+        for i in range(WGETS):
+                runwget(url, pipes)
+
 def attachvlc(pipe):
+	"""
+	Attach VLC instance to a pipe fd
+	"""
+	print("Attaching VLC to pipe " + str(pipe))
 	m = ivlc.media_new_fd(pipe.fileno())
 	vlcplayer.set_media(m)
 	vlcplayer.play()
 
+def getstats():
+	"""
+	Gather VLC statistics
+	"""
+	m = vlcplayer.get_media()
+	stats = vlc.MediaStats()
+	m.get_stats(stats)
+	return stats
+
 def testnext(pipes):
+	"""
+	Move to next pipe to test
+	"""
 	global pipe_to_test
 	if pipe_to_test is not None:
 		pipes.append(pipe_to_test)
@@ -46,7 +78,8 @@ def testnext(pipes):
 	attachvlc(pipe_to_test)
 	
 if __name__ == "__main__":
-	print ("HTTP Stream strainer by Markus Vuorio, 2013\nUsing VLC version " + vlc.libvlc_get_version())
+	print("HTTP Stream strainer by Markus Vuorio, 2013")
+	print("Using VLC version " + vlc.libvlc_get_version())
 	if len(sys.argv) < 2:
 		print("Use: " + sys.argv[0] + " http://your/url")
 		sys.exit(1)
@@ -54,19 +87,24 @@ if __name__ == "__main__":
 	url = sys.argv[1]
 	pipes = []
 
-	for i in range(WGETS):
-		runwget(url, pipes)
+	startwgets(url, pipes)
 
 	testedpipes = 0
+	total_corrupted = 0
+	start_time = time.time()
 	last_time = time.time()
 	testnext(pipes)
+	try:
+		print("Test running, interrupt with ctrl+c")
+		while (True):
+			if (time.time() - last_time > PIPE_CHANGE_INTERVAL):
+				total_corrupted += getstats().demux_corrupted
+				testnext(pipes)
+				last_time = time.time()
+			
+			for i in pipes:
+				i.read(1000)
 
-	while (True):
-		if (time.time() - last_time > PIPE_CHANGE_INTERVAL):
-			testnext(pipes)
-			last_time = time.time()
-		
-		for i in pipes:
-			i.read(1000)
-
-	raw_input("Press Enter to stop")
+	except KeyboardInterrupt:
+		run_time = time.time() - start_time
+		print ("Test run for {0:.3g} seconds, got total of {1} demux corruptions.".format(run_time, total_corrupted))
