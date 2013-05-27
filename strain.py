@@ -26,12 +26,17 @@ import subprocess
 WGETOPTS = "-q -O-"
 WGETS = 1000 #How many wgets to spawn
 PIPE_CHANGE_INTERVAL = 20 #How many seconds will we test one stream
+NULLREAD = 4096 #How many bytes to read to discard
 WGET = "/usr/bin/wget"
 
 #These options should disable media decoding, we are only interested in mux wellbeing
-ivlc = vlc.Instance("--novideo", "--no-audio") 
+ivlc = vlc.Instance( "--no-audio", "--novideo", "--quiet") 
 vlcplayer = ivlc.media_player_new()
 pipe_to_test = None
+allstats = {
+	'total_corrupted':0,
+	'decoded_delta':0,
+}
 
 def runwget(url, pipes):
 	"""
@@ -67,6 +72,11 @@ def getstats():
 	m.get_stats(stats)
 	return stats
 
+def buildstats(allstats, stats, start_time):
+	allstats['total_corrupted'] += stats.demux_corrupted
+	runtime = time.time() - start_time
+	allstats['decoded_delta'] += runtime - stats.decoded_video
+
 def testnext(pipes):
 	"""
 	Move to next pipe to test
@@ -74,7 +84,7 @@ def testnext(pipes):
 	global pipe_to_test
 	if pipe_to_test is not None:
 		pipes.append(pipe_to_test)
-	pipe_to_test = pipes.pop()
+	pipe_to_test = pipes.pop(0)
 	attachvlc(pipe_to_test)
 	
 if __name__ == "__main__":
@@ -98,13 +108,14 @@ if __name__ == "__main__":
 		print("Test running, interrupt with ctrl+c")
 		while (True):
 			if (time.time() - last_time > PIPE_CHANGE_INTERVAL):
-				total_corrupted += getstats().demux_corrupted
+				buildstats(allstats, getstats(), start_time)
 				testnext(pipes)
+				testedpipes += 1
 				last_time = time.time()
 			
 			for i in pipes:
-				i.read(1000)
+				i.read(NULLREAD)
 
 	except KeyboardInterrupt:
-		run_time = time.time() - start_time
-		print ("Test run for {0:.3g} seconds, got total of {1} demux corruptions.".format(run_time, total_corrupted))
+			run_time = time.time() - start_time
+			print ("Test run for {0:.3g} seconds, got total of {1} demux corruptions. Tested {2} pipes.".format(run_time, allstats['total_corrupted'], testedpipes))
