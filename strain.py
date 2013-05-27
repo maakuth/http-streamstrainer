@@ -14,6 +14,7 @@
 
 import os
 import sys
+import vlc
 import subprocess
 
 WGETOPTS = "-q -O-"
@@ -37,3 +38,9 @@ if __name__ == "__main__":
 	
 	for i in range(WGETS):
 		runwget(url)
+
+	while (True):
+		for i in pipes:
+			i.read(1000)
+
+	raw_input("Press Enter to stop")
