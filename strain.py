@@ -23,9 +23,9 @@ import vlc
 import time
 import subprocess
 
-WGETOPTS = "-q -O-"
+WGETOPTS = "-q -O- --no-dns-cache"
 WGETS = 1000 #How many wgets to spawn
-PIPE_CHANGE_INTERVAL = 20 #How many seconds will we test one stream
+PIPE_CHANGE_INTERVAL = 60 #How many seconds will we test one stream
 NULLREAD = 4096 #How many bytes to read to discard
 WGET = "/usr/bin/wget"
 
@@ -42,6 +42,7 @@ def runwget(url, pipes):
 	"""
 	Start one wget instance and add it's stdout to global pipes list
 	"""
+	print ("Starting wget {0}".format(str(len(pipes))))
 	cmdline = WGET + " " + WGETOPTS + " " + url
 	p = subprocess.Popen(cmdline, shell=True, stdout=subprocess.PIPE)
 	pipes.append(p.stdout)
@@ -97,7 +98,7 @@ if __name__ == "__main__":
 	url = sys.argv[1]
 	pipes = []
 
-	startwgets(url, pipes)
+	runwget(url, pipes)
 
 	testedpipes = 0
 	total_corrupted = 0
@@ -108,14 +109,19 @@ if __name__ == "__main__":
 		print("Test running, interrupt with ctrl+c")
 		while (True):
 			if (time.time() - last_time > PIPE_CHANGE_INTERVAL):
+				print ("{0} pipes alive.".format(str(len(pipes))))
 				buildstats(allstats, getstats(), start_time)
 				testnext(pipes)
 				testedpipes += 1
 				last_time = time.time()
+				if len(pipes) < WGETS:
+					runwget(url, pipes)
 			
 			for i in pipes:
-				i.read(NULLREAD)
-
+				try:
+					i.read(NULLREAD)
+				except IOError:
+					pass
 	except KeyboardInterrupt:
 			run_time = time.time() - start_time
 			print ("Test run for {0:.3g} seconds, got total of {1} demux corruptions. Tested {2} pipes.".format(run_time, allstats['total_corrupted'], testedpipes))
